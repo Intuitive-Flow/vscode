@@ -268,7 +268,7 @@ export interface IEditorOptions {
 	/**
 	 * Controls whether to use default color decorations or not using the default document color provider
 	 */
-	defaultColorDecorators?: boolean;
+	defaultColorDecorators?: 'auto' | 'always' | 'never';
 	/**
 	 * Disable the use of `transform: translate3d(0px, 0px, 0px)` for the editor margin and lines layers.
 	 * The usage of `transform: translate3d(0px, 0px, 0px)` acts as a hint for browsers to create an extra layer.
@@ -4195,9 +4195,10 @@ export interface IInlineSuggestOptions {
 	edits?: {
 		experimental?: {
 			enabled?: boolean;
-			useMixedLinesDiff?: 'never' | 'whenPossible' | 'afterJumpWhenPossible';
+			useMixedLinesDiff?: 'never' | 'whenPossible' | 'forStableInsertions' | 'afterJumpWhenPossible';
 			useInterleavedLinesDiff?: 'never' | 'always' | 'afterJump';
 			onlyShowWhenCloseToCursor?: boolean;
+			useGutterIndicator?: boolean;
 		};
 	};
 }
@@ -4227,9 +4228,10 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 			edits: {
 				experimental: {
 					enabled: true,
-					useMixedLinesDiff: 'never',
+					useMixedLinesDiff: 'forStableInsertions',
 					useInterleavedLinesDiff: 'never',
 					onlyShowWhenCloseToCursor: true,
+					useGutterIndicator: false,
 				},
 			},
 		};
@@ -4277,7 +4279,7 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 					type: 'string',
 					default: defaults.edits.experimental.useMixedLinesDiff,
 					description: nls.localize('inlineSuggest.edits.experimental.useMixedLinesDiff', "Controls whether to enable experimental edits in inline suggestions."),
-					enum: ['never', 'whenPossible'],
+					enum: ['never', 'whenPossible', 'forStableInsertions', 'afterJumpWhenPossible'],
 				},
 				'editor.inlineSuggest.edits.experimental.useInterleavedLinesDiff': {
 					type: 'string',
@@ -4289,6 +4291,11 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 					type: 'boolean',
 					default: defaults.edits.experimental.onlyShowWhenCloseToCursor,
 					description: nls.localize('inlineSuggest.edits.experimental.onlyShowWhenCloseToCursor', "Controls whether to only show inline suggestions when the cursor is close to the suggestion.")
+				},
+				'editor.inlineSuggest.edits.experimental.useGutterIndicator': {
+					type: 'boolean',
+					default: defaults.edits.experimental.useGutterIndicator,
+					description: nls.localize('inlineSuggest.edits.experimental.useGutterIndicator', "Controls whether to show a gutter indicator for inline suggestions.")
 				},
 			}
 		);
@@ -4310,9 +4317,10 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 			edits: {
 				experimental: {
 					enabled: boolean(input.edits?.experimental?.enabled, this.defaultValue.edits.experimental.enabled),
-					useMixedLinesDiff: stringSet(input.edits?.experimental?.useMixedLinesDiff, this.defaultValue.edits.experimental.useMixedLinesDiff, ['never', 'whenPossible', 'afterJumpWhenPossible']),
+					useMixedLinesDiff: stringSet(input.edits?.experimental?.useMixedLinesDiff, this.defaultValue.edits.experimental.useMixedLinesDiff, ['never', 'whenPossible', 'forStableInsertions', 'afterJumpWhenPossible']),
 					useInterleavedLinesDiff: stringSet(input.edits?.experimental?.useInterleavedLinesDiff, this.defaultValue.edits.experimental.useInterleavedLinesDiff, ['never', 'always', 'afterJump']),
 					onlyShowWhenCloseToCursor: boolean(input.edits?.experimental?.onlyShowWhenCloseToCursor, this.defaultValue.edits.experimental.onlyShowWhenCloseToCursor),
+					useGutterIndicator: boolean(input.edits?.experimental?.useGutterIndicator, this.defaultValue.edits.experimental.useGutterIndicator),
 				},
 			},
 		};
@@ -5553,7 +5561,7 @@ export const EditorOptions = {
 		}
 	)),
 	accessibilitySupport: register(new EditorAccessibilitySupport()),
-	accessibilityPageSize: register(new EditorIntOption(EditorOption.accessibilityPageSize, 'accessibilityPageSize', 10, 1, Constants.MAX_SAFE_SMALL_INTEGER,
+	accessibilityPageSize: register(new EditorIntOption(EditorOption.accessibilityPageSize, 'accessibilityPageSize', 500, 1, Constants.MAX_SAFE_SMALL_INTEGER,
 		{
 			description: nls.localize('accessibilityPageSize', "Controls the number of lines in the editor that can be read out by a screen reader at once. When we detect a screen reader we automatically set the default to be 500. Warning: this has a performance implication for numbers larger than the default."),
 			tags: ['accessibility']
@@ -5703,7 +5711,7 @@ export const EditorOptions = {
 			nls.localize('editor.colorDecoratorActivatedOn.hover', "Make the color picker appear on hover of the color decorator"),
 			nls.localize('editor.colorDecoratorActivatedOn.click', "Make the color picker appear on click of the color decorator")
 		],
-		description: nls.localize('colorDecoratorActivatedOn', "Controls the condition to make a color picker appear from a color decorator")
+		description: nls.localize('colorDecoratorActivatedOn', "Controls the condition to make a color picker appear from a color decorator.")
 	})),
 	colorDecoratorsLimit: register(new EditorIntOption(
 		EditorOption.colorDecoratorsLimit, 'colorDecoratorsLimit', 500, 1, 1000000,
@@ -6342,9 +6350,17 @@ export const EditorOptions = {
 	// Leave these at the end (because they have dependencies!)
 	effectiveCursorStyle: register(new EffectiveCursorStyle()),
 	editorClassName: register(new EditorClassName()),
-	defaultColorDecorators: register(new EditorBooleanOption(
-		EditorOption.defaultColorDecorators, 'defaultColorDecorators', true,
-		{ markdownDescription: nls.localize('defaultColorDecorators', "Controls whether inline color decorations should be shown using the default document color provider") }
+	defaultColorDecorators: register(new EditorStringEnumOption(
+		EditorOption.defaultColorDecorators, 'defaultColorDecorators', 'auto' as 'auto' | 'always' | 'never',
+		['auto', 'always', 'never'] as const,
+		{
+			enumDescriptions: [
+				nls.localize('editor.defaultColorDecorators.auto', "Show default color decorators only when no extension provides colors decorators."),
+				nls.localize('editor.defaultColorDecorators.always', "Always show default color decorators."),
+				nls.localize('editor.defaultColorDecorators.never', "Never show default color decorators."),
+			],
+			description: nls.localize('defaultColorDecorators', "Controls whether inline color decorations should be shown using the default document color provider.")
+		}
 	)),
 	pixelRatio: register(new EditorPixelRatio()),
 	tabFocusMode: register(new EditorBooleanOption(EditorOption.tabFocusMode, 'tabFocusMode', false,

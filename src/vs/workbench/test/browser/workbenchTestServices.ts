@@ -642,7 +642,7 @@ export class TestLayoutService implements IWorkbenchLayoutService {
 	hasMainWindowBorder(): boolean { return false; }
 	getMainWindowBorderRadius(): string | undefined { return undefined; }
 	isVisible(_part: Parts): boolean { return true; }
-	getContainer(): HTMLElement { return null!; }
+	getContainer(): HTMLElement { return mainWindow.document.body; }
 	whenContainerStylesLoaded() { return undefined; }
 	isTitleBarHidden(): boolean { return false; }
 	isStatusBarHidden(): boolean { return false; }
@@ -2224,9 +2224,6 @@ export class TestWorkbenchExtensionManagementService implements IWorkbenchExtens
 		throw new Error('Method not implemented.');
 	}
 	uninstallExtensions(extensions: UninstallExtensionInfo[]): Promise<void> {
-		throw new Error('Method not implemented.');
-	}
-	async reinstallFromGallery(extension: ILocalExtension): Promise<ILocalExtension> {
 		throw new Error('Method not implemented.');
 	}
 	async getInstalled(type?: ExtensionType | undefined): Promise<ILocalExtension[]> { return []; }
