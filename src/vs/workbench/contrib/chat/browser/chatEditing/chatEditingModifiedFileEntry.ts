@@ -6,6 +6,7 @@
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable, IReference, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Schemas } from '../../../../../base/common/network.js';
 import { IObservable, ITransaction, observableValue, transaction } from '../../../../../base/common/observable.js';
 import { themeColorFromId } from '../../../../../base/common/themables.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -171,12 +172,15 @@ export class ChatEditingModifiedFileEntry extends Disposable implements IModifie
 
 
 		this._register(this.doc.onDidChangeContent(e => this._mirrorEdits(e)));
-		this._register(this._fileService.watch(this.modifiedURI));
-		this._register(this._fileService.onDidFilesChange(e => {
-			if (e.affects(this.modifiedURI) && kind === ChatEditKind.Created && e.gotDeleted()) {
-				this._onDidDelete.fire();
-			}
-		}));
+
+		if (this.modifiedURI.scheme !== Schemas.untitled) {
+			this._register(this._fileService.watch(this.modifiedURI));
+			this._register(this._fileService.onDidFilesChange(e => {
+				if (e.affects(this.modifiedURI) && kind === ChatEditKind.Created && e.gotDeleted()) {
+					this._onDidDelete.fire();
+				}
+			}));
+		}
 
 		this._register(toDisposable(() => {
 			this._clearCurrentEditLineDecoration();
@@ -420,7 +424,7 @@ export class ChatEditingModifiedFileEntry extends Disposable implements IModifie
 			if (this._allEditsAreFromUs) {
 				// save the file after discarding so that the dirty indicator goes away
 				// and so that an intermediate saved state gets reverted
-				await this.docFileEditorModel.save({ reason: SaveReason.EXPLICIT });
+				await this.docFileEditorModel.save({ reason: SaveReason.EXPLICIT, skipSaveParticipants: true });
 			}
 			await this.collapse(transaction);
 		}
